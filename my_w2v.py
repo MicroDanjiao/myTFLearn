@@ -61,17 +61,24 @@ class MyW2V(object):
 
         self.corpus.close()
 
+    def save_vector(self, filename):
+        with open(filename, "w") as wf:
+            for i in xrange(len(self.corpus.id2word)):
+                print >> wf, self.corpus.id2word[i], ' '.join(self.final_embeddings[i].astype('str'))
+    
+    def load_vector(self):
+        pass
+
     def transform():
         pass
 
 def usage():
     print "\t-h / --help"
     print "\t--corpus: corpus_file (required))"
-    print "\t--vocab_size: the size of vocabulary (required)"        
 
 if __name__ == "__main__":
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "corpus=", "vocab_size="])
+        opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "corpus="])
     except getopt.GetoptError:
         print "%s usage:" % sys.argv[0]
         usage()
@@ -91,7 +98,8 @@ if __name__ == "__main__":
         usage()
         sys.exit(1)
 
-    w2v = MyW2V(corpus_file=corpus, batch_size=128, embedding_size=128, skip_window=2,
-                num_sampled=1, num_step=1000, loss_freq=200, num_per_win=2, min_cnt=2)
+    w2v = MyW2V(corpus_file=corpus, batch_size=128, embedding_size=10, skip_window=2,
+                num_sampled=1, num_step=1000, loss_freq=200, num_per_win=2, min_cnt=1)
 
     w2v.fit()
+    w2v.save_vector("aaa")
