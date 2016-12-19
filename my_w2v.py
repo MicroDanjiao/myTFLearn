@@ -8,6 +8,11 @@ import tensorflow as tf
 from text_dataset import TextDataset
 
 class MyW2V(object):
+    '''
+        learn word vector of skip-gram using negative sampling.
+        refer to: 
+        https://github.com/tensorflow/tensorflow/blob/r0.12/tensorflow/examples/tutorials/word2vec/word2vec_basic.py
+    '''
     def __init__(self, corpus_file, batch_size=128, embedding_size=128, skip_window=2, 
                 num_sampled=64, num_step=1000, loss_freq=200, num_per_win=2, min_cnt=2):
         self.batch_size = batch_size
