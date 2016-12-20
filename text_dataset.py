@@ -13,8 +13,10 @@ def strip_word(word):
     ori_word = word
     if word[0] in pre_lst:
         word = word[1:]
+        return strip_word(word)
     if word[-1] in post_lst:
         word = word[:-1]
+        return strip_word(word)
     if len(word) == 0:
         return ori_word
     return word
