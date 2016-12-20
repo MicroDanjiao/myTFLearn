@@ -26,6 +26,9 @@ class TextDataset(object):
         this class used to generate dataset for w2v
     '''
     def __init__(self, filename, min_cnt=2, batch_size=128, win_size=1, num_per_win=1):
+        '''
+            attention: the context is (win_size target win_size),
+        '''
         if not os.path.isfile(filename):
             raise Exception("the file %s not found" % filename)
 
@@ -60,13 +63,18 @@ class TextDataset(object):
             del counter[w]
         counter["UNK"] = unk_cnt
 
+        # "EMPTY" is placeholder of the start and end of the sentences for CBOW
+        word2id["_EMPTY_"] = len(word2id)
         print "vocabulary size: %d" %len(counter)
         id2word = dict(zip(word2id.values(), word2id.keys()))
         self.word2id = word2id
         self.id2word = id2word
         self.wordcnt = counter
 
-    def gen_batch_iter(self):
+    def gen_skipgram_batch_iter(self):
+        '''
+            batch iteration for skip-gram
+        '''
         self.rf.seek(0,0)
         batch = np.ndarray(shape=(self.batch_size), dtype=np.int32)
         labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
@@ -103,19 +111,69 @@ class TextDataset(object):
                         batch_idx = 0
                         batch = np.ndarray(shape=(self.batch_size), dtype=np.int32)
                         labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
-    
+   
+
+    def gen_cbow_batch_iter(self):
+        '''
+            batch iteration for CBOW
+            the context window size is 2*win_size
+            '_EMPTY_' placeholder will fill the window if context words are not enough
+        '''
+        self.rf.seek(0,0)
+        ctx_win_size = 2*self.win_size
+        batch = np.ndarray(shape=(self.batch_size, ctx_win_size), dtype=np.int32)
+        labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
+        batch_idx = 0
+        while True:
+            line = self.rf.readline()
+            if line == "":
+                self.rf.seek(0,0)
+                line = self.rf.readline()
+            #print line
+            words = [strip_word(w.lower()) for w in line.strip().split()]
+            
+            if len(words) <= 1:
+                continue
+            wids = [self.word2id.get(w, 0) for w in words]
+            #print wids
+            #[window target window]
+            for i in range(len(wids)):
+                center_id = wids[i]
+                ctx_ids = []
+                for j in range(i-self.win_size, i+self.win_size+1):
+                    if j != i and 0 <= j < len(wids):
+                        ctx_ids.append(wids[j])
+               
+                # fill the context 
+                placeholder_id = self.word2id["_EMPTY_"]
+                for k in range(ctx_win_size-len(ctx_ids)):
+                    ctx_ids.append(placeholder_id)
+
+                batch[batch_idx, :] = ctx_ids
+                labels[batch_idx] = center_id
+                batch_idx += 1
+            
+                # one batch is filled
+                if batch_idx == self.batch_size:
+                    yield batch, labels
+                    batch_idx = 0
+                    batch = np.ndarray(shape=(self.batch_size, ctx_win_size), dtype=np.int32)
+                    labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)                    
+
     def close(self):
         self.rf.close()
 
 if __name__ == "__main__":
-    td = TextDataset("test", min_cnt=1, batch_size=5, win_size=2, num_per_win=2)
+    td = TextDataset("data/test", min_cnt=1, batch_size=5, win_size=2, num_per_win=2)
     print td.word2id
     print td.id2word
-    batch_iter = td.gen_batch_iter()
-    for x in range(15):
+    batch_iter = td.gen_cbow_batch_iter()
+    for x in range(10):
         batch, labels = batch_iter.next()
-        print len(batch), batch
-        print len(labels), labels.ravel()
+        print "batch", len(batch)
+        print batch
+        print "lables", len(labels)
+        print labels.ravel()
         print "********"
     td.close()
 

@@ -14,7 +14,7 @@ class MyW2V(object):
         refer to: 
         https://github.com/tensorflow/tensorflow/blob/r0.12/tensorflow/examples/tutorials/word2vec/word2vec_basic.py
     '''
-    def __init__(self, corpus_file, batch_size=128, embedding_size=128, skip_window=2, 
+    def __init__(self, corpus_file, method="skip-gram", batch_size=128, embedding_size=128, skip_window=2, 
                 num_sampled=64, num_step=1000, loss_freq=200, num_per_win=2, min_cnt=2):
         self.batch_size = batch_size
         self.embedding_size = embedding_size
@@ -22,6 +22,7 @@ class MyW2V(object):
         self.num_step = num_step
         self.num_sampled = num_sampled
         self.loss_freq = loss_freq
+        self.method = method
 
         # corpus iteration
         self.corpus = TextDataset(corpus_file, min_cnt=min_cnt, batch_size=batch_size, win_size=skip_window, num_per_win=num_per_win)
@@ -39,7 +40,15 @@ class MyW2V(object):
         train_inputs = tf.placeholder(tf.int32, shape=([self.batch_size]))
         train_labels = tf.placeholder(tf.int32, shape=([self.batch_size, 1]))
 
-        embed = tf.nn.embedding_lookup(self.embeddings, train_inputs)
+        if self.method == "cbow":
+            # shape: (n_batch, n_ctx_win_size, embeddings_size)
+            ctx_embed = tf.nn.embedding_lookup(self.embeddings, train_inputs)
+            # shape: (n_batch, embeddings_size)
+            embed = tf.reduce_mean(ctx_embed, axis=1)
+        else:
+            # shape: (n_batch, embeddings_size)
+            embed = tf.nn.embedding_lookup(self.embeddings, train_inputs)
+
 
         norm = tf.sqrt(tf.reduce_sum(tf.square(self.embeddings), 1, keep_dims=True))
         normalized_embeddings = self.embeddings / norm
@@ -48,7 +57,7 @@ class MyW2V(object):
         optimizer = tf.train.GradientDescentOptimizer(1.0).minimize(loss)
 
         average_loss = 0
-        batch_iter = self.corpus.gen_batch_iter()
+        batch_iter = self.corpus.gen_skipgram_batch_iter()
         with tf.Session() as session:
             session.run(tf.initialize_all_variables())
             print("init params OK ...")
@@ -61,7 +70,7 @@ class MyW2V(object):
                 if step % self.loss_freq == 0:
                     if step > 0:
                         average_loss /= 200
-                    print "Average loss at step:", step, ":", average_loss
+                    print "average loss at step:", step, ":", average_loss
                     average_loss = 0
             self.final_embeddings = normalized_embeddings.eval()
 
@@ -81,12 +90,13 @@ class MyW2V(object):
 def usage():
     print "\t-h / --help"
     print "\t--corpus: corpus_file (required))"
+    print "\t--method skip-gram/cbow"
     print "\t--outfile: word vector output"
     print "\t--visual: word vector picture"
 
 if __name__ == "__main__":
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hco:v:", ["help", "corpus=", "outfile=", "visual="])
+        opts, args = getopt.getopt(sys.argv[1:], "hco:v:", ["help", "corpus=", "outfile=", "visual=", "method="])
     except getopt.GetoptError:
         print "%s usage:" % sys.argv[0]
         usage()
@@ -95,11 +105,17 @@ if __name__ == "__main__":
     corpus = None
     outfilename = None
     picfilename = None
+    method = "skip-gram"
     for opt, arg in opts:
         if opt in ("-h", "--help"):
             print "%s usage:" % sys.argv[0]
             usage()
             sys.exit(1)
+        elif opt in ["method"]:
+            if arg not in ["skip-gram", "cbow"]:
+                usage()
+                sys.exit(1)
+            arg = opt
         elif opt in ("-c", "--corpus"):
             corpus = arg
         elif opt in ["-o", "--outfile"]:
@@ -112,7 +128,7 @@ if __name__ == "__main__":
         usage()
         sys.exit(1)
 
-    w2v = MyW2V(corpus_file=corpus, batch_size=128, embedding_size=50, skip_window=3,
+    w2v = MyW2V(method=method, corpus_file=corpus, batch_size=128, embedding_size=50, skip_window=3,
                 num_sampled=4, num_step=20000, loss_freq=1000, num_per_win=4, min_cnt=1)
 
     w2v.fit()
