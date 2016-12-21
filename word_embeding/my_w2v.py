@@ -15,7 +15,7 @@ class MyW2V(object):
         https://github.com/tensorflow/tensorflow/blob/r0.12/tensorflow/examples/tutorials/word2vec/word2vec_basic.py
     '''
     def __init__(self, corpus_file, method="skip-gram", batch_size=128, embedding_size=128, skip_window=2, 
-                num_sampled=64, num_step=1000, loss_freq=200, num_per_win=2, min_cnt=2):
+                num_sampled=64, num_step=1000, loss_freq=200, num_per_win=2, min_cnt=2, lr=1.0):
         self.batch_size = batch_size
         self.embedding_size = embedding_size
         self.skip_window = skip_window
@@ -23,6 +23,7 @@ class MyW2V(object):
         self.num_sampled = num_sampled
         self.loss_freq = loss_freq
         self.method = method
+        self.lr = lr
 
         # corpus iteration
         self.corpus = TextDataset(corpus_file, min_cnt=min_cnt, batch_size=batch_size, win_size=skip_window, num_per_win=num_per_win)
@@ -54,7 +55,7 @@ class MyW2V(object):
         normalized_embeddings = self.embeddings / norm
 
         loss = tf.reduce_mean(tf.nn.nce_loss(self.nce_weights, self.nce_biases, embed, train_labels, self.num_sampled, self.vocab_size))
-        optimizer = tf.train.GradientDescentOptimizer(1.0).minimize(loss)
+        optimizer = tf.train.GradientDescentOptimizer(self.lr).minimize(loss)
 
         average_loss = 0
         batch_iter = self.corpus.gen_skipgram_batch_iter()
@@ -69,7 +70,7 @@ class MyW2V(object):
 
                 if step % self.loss_freq == 0:
                     if step > 0:
-                        average_loss /= 200
+                        average_loss /= self.loss_freq
                     print "average loss at step:", step, ":", average_loss
                     average_loss = 0
             self.final_embeddings = normalized_embeddings.eval()
@@ -81,12 +82,6 @@ class MyW2V(object):
             for i in xrange(len(self.corpus.id2word)):
                 print >> wf, self.corpus.id2word[i], ' '.join(self.final_embeddings[i].astype('str'))
     
-    def load_vector(self):
-        pass
-
-    def transform():
-        pass
-
 def usage():
     print "\t-h / --help"
     print "\t--corpus: corpus_file (required))"
@@ -129,7 +124,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     w2v = MyW2V(method=method, corpus_file=corpus, batch_size=128, embedding_size=50, skip_window=3,
-                num_sampled=4, num_step=20000, loss_freq=1000, num_per_win=4, min_cnt=1)
+                num_sampled=4, num_step=20000, loss_freq=1000, num_per_win=4, min_cnt=1, lr=1.0)
 
     w2v.fit()
     if outfilename is not None:
