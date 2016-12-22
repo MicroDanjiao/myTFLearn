@@ -15,15 +15,17 @@ class EmbedUtils(object):
         # load word embedding file
         with open(embed_file, "r") as rf:
             for line in rf:
-                tokens = rf.readlines().split()
+                tokens = line.split()
                 self.id2word.append(tokens[0])
-            embed = [int(w) for w in tokens[1:]]    
-            embeddings.append(embed)
+                embed = [float(w) for w in tokens[1:]]    
+                embeddings.append(embed)
 
         self.embeddings = np.array(embeddings) 
         self.word2id = {}
         for i, w in enumerate(self.id2word):
             self.word2id[w] = i
+        print "load vector file success"
+        print "embedding shape:", self.embeddings.shape
 
     def analogy(self, w0, w1, w2, n_top=5):
         '''
@@ -33,9 +35,9 @@ class EmbedUtils(object):
             if w not in self.word2id:
                 print "%s is not in the vocabulary" %w
                 return []
-        a_id = self.word2id[w1]
-        b_id = self.word2id[w2]
-        c_id = self.word2id[w3]
+        a_id = self.word2id[w0]
+        b_id = self.word2id[w1]
+        c_id = self.word2id[w2]
         a_emb = self.embeddings[a_id]
         b_emb = self.embeddings[b_id]
         c_emb = self.embeddings[c_id]
@@ -43,10 +45,10 @@ class EmbedUtils(object):
         target = c_emb + (b_emb - a_emb)
         
         dist = np.matmul(self.embeddings, target).ravel()
-        top_k = dist.argsort(dist)[len(dist)-1:len(dist)-1-n_top:-1]
+        top_k = dist.argsort()[len(dist)-1:len(dist)-1-n_top:-1]
         res = []
         for k in top_k:
-            res.append((k, dist[k]))
+            res.append((self.id2word[k], dist[k]))
         return res
 
     def nearby(self, word, n_top=10):
@@ -59,12 +61,20 @@ class EmbedUtils(object):
         wid = self.word2id[word]
         emb = self.embeddings[wid]
         dist = np.matmul(self.embeddings, emb).ravel()
-        top_k = dist.argsort(dist)[len(dist)-1:len(dist)-1-n_top:-1]
+        top_k = dist.argsort()[len(dist)-1:len(dist)-1-n_top:-1]
         res = []
         for k in top_k:
-            res.append((k, dist[k]))
+            w = self.id2word[k]
+            res.append((w, dist[k]))
         return res
     
 
 if __name__ == "__main__":
-    pass
+    emb_util = EmbedUtils("data/cbow_vector")
+    res = emb_util.nearby("speed")
+    print res
+    res = emb_util.analogy("being", "be", "are")
+    print res
+
+
+
