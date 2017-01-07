@@ -63,7 +63,7 @@ class TextDataset(object):
             del counter[w]
         counter["UNK"] = unk_cnt
 
-        # "EMPTY" is placeholder of the start and end of the sentences for CBOW
+        # "_EMPTY_" is placeholder of the start and end of the sentences for CBOW
         word2id["_EMPTY_"] = len(word2id)
         print "vocabulary size: %d" %len(counter)
         id2word = dict(zip(word2id.values(), word2id.keys()))
@@ -84,6 +84,7 @@ class TextDataset(object):
             if line == "":
                 self.rf.seek(0,0)
                 line = self.rf.readline()
+                #print "start to pass through the text from beginning..."
             #print line
             words = [strip_word(w.lower()) for w in line.strip().split()]
             if len(words) <= 1:
@@ -129,6 +130,7 @@ class TextDataset(object):
             if line == "":
                 self.rf.seek(0,0)
                 line = self.rf.readline()
+                #print "start to pass through the text from beginning..."
             #print line
             words = [strip_word(w.lower()) for w in line.strip().split()]
             
