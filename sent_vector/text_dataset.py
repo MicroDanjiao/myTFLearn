@@ -26,7 +26,7 @@ class TextDataset(object):
         This class used to generate dataset for w2v
         The line number will be used, so one line should be one sentence or one paragraph.     
     '''
-    def __init__(self, filename, min_cnt=2, batch_size=128, win_size=1):
+    def __init__(self, filename, min_cnt=2, batch_size=128, win_size=1, word2id=None):
         '''
             attention: the context is (win_size target win_size),
         '''
@@ -39,7 +39,18 @@ class TextDataset(object):
         self.win_size = win_size
     
         self.rf = open(filename, "r")
-        self._build_dataset()
+        if word2id is None:
+            self._build_dataset()
+        else:
+            self._set_word2id(word2id)
+
+    def _set_word2id(word2id):
+        self.word2id = word2id
+        self.id2word = dict(zip(word2id.values(), word2id.keys()))
+        num_of_lines = 0
+        for line in self.rf:
+            num_of_lines += 1
+        self.num_of_lines = num_of_lines
 
     def _build_dataset(self):
         counter = collections.Counter()
@@ -101,7 +112,8 @@ class TextDataset(object):
             
             if len(words) <= 1:
                 continue
-            wids = [self.word2id.get(w, 0) for w in words]
+            unk_id = self.word2id.get("UNK")
+            wids = [self.word2id.get(w, unk_id) for w in words]
             #print wids
             #[window target window]
             for i in range(len(wids)):
