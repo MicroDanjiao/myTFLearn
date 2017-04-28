@@ -8,9 +8,6 @@ pre_lst = ["\"", "\'"]
 post_lst = [".", ",", "!", "?", ";", "\"", "\'"]
 
 def strip_word(word):
-    '''
-        remove punctuation from the word
-    '''
     if len(word) <= 1:
         return word
     ori_word = word
@@ -26,9 +23,10 @@ def strip_word(word):
 
 class TextDataset(object):
     '''
-        this class used to generate dataset for w2v
+        This class used to generate dataset for w2v
+        The line number will be used, so one line should be one sentence or one paragraph.     
     '''
-    def __init__(self, filename, min_cnt=2, batch_size=128, win_size=1, num_per_win=1):
+    def __init__(self, filename, min_cnt=2, batch_size=128, win_size=1, word2id=None):
         '''
             attention: the context is (win_size target win_size),
         '''
@@ -39,19 +37,30 @@ class TextDataset(object):
         self.filename = filename
         self.batch_size = batch_size
         self.win_size = win_size
-        self.num_per_win = num_per_win
-        assert num_per_win <= 2 * win_size
     
         self.rf = open(filename, "r")
-        self._build_dataset()
+        if word2id is None:
+            self._build_dataset()
+        else:
+            self._set_word2id(word2id)
+
+    def _set_word2id(word2id):
+        self.word2id = word2id
+        self.id2word = dict(zip(word2id.values(), word2id.keys()))
+        num_of_lines = 0
+        for line in self.rf:
+            num_of_lines += 1
+        self.num_of_lines = num_of_lines
 
     def _build_dataset(self):
         counter = collections.Counter()
         word2id = {"UNK": 0}
         self.rf.seek(0, 0)
+        num_of_lines = 0    # the number of lines
         for line in self.rf:
             words = [strip_word(w.lower()) for w in line.strip().split()]
             counter.update(words)
+            num_of_lines += 1
 
         unk_cnt = 0
         rm_word = []
@@ -73,49 +82,7 @@ class TextDataset(object):
         self.word2id = word2id
         self.id2word = id2word
         self.wordcnt = counter
-
-    def gen_skipgram_batch_iter(self):
-        '''
-            batch iteration for skip-gram
-        '''
-        self.rf.seek(0,0)
-        batch = np.ndarray(shape=(self.batch_size), dtype=np.int32)
-        labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
-        batch_idx = 0
-        while True:
-            line = self.rf.readline()
-            if line == "":
-                self.rf.seek(0,0)
-                line = self.rf.readline()
-                #print "start to pass through the text from beginning..."
-            #print line
-            words = [strip_word(w.lower()) for w in line.strip().split()]
-            if len(words) <= 1:
-                continue
-            wids = [self.word2id.get(w, 0) for w in words]
-            #print wids
-            #[window target window]
-            for i in range(len(wids)):
-                center_id = wids[i]
-                ctx_ids = []
-                for j in range(i-self.win_size, i+self.win_size+1):
-                    if j != i and 0 <= j < len(wids):
-                        ctx_ids.append(wids[j])
-
-                # shuffle the context words
-                np.random.shuffle(ctx_ids)
-                for ctx_id in ctx_ids[:self.num_per_win]:
-                    batch[batch_idx] = center_id
-                    labels[batch_idx] = ctx_id
-                    batch_idx += 1
-            
-                    # one batch is filled
-                    if batch_idx == self.batch_size:
-                        yield batch, labels
-                        batch_idx = 0
-                        batch = np.ndarray(shape=(self.batch_size), dtype=np.int32)
-                        labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
-   
+        self.num_of_lines = num_of_lines
 
     def gen_cbow_batch_iter(self):
         '''
@@ -125,21 +92,28 @@ class TextDataset(object):
         '''
         self.rf.seek(0,0)
         ctx_win_size = 2*self.win_size
+
         batch = np.ndarray(shape=(self.batch_size, ctx_win_size), dtype=np.int32)
         labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
+        lineids = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
+
         batch_idx = 0
+        line_idx = -1
         while True:
             line = self.rf.readline()
+            line_idx += 1
+            #print line, line_idx
             if line == "":
                 self.rf.seek(0,0)
                 line = self.rf.readline()
+                line_idx = 0
                 #print "start to pass through the text from beginning..."
-            #print line
             words = [strip_word(w.lower()) for w in line.strip().split()]
             
             if len(words) <= 1:
                 continue
-            wids = [self.word2id.get(w, 0) for w in words]
+            unk_id = self.word2id.get("UNK")
+            wids = [self.word2id.get(w, unk_id) for w in words]
             #print wids
             #[window target window]
             for i in range(len(wids)):
@@ -156,29 +130,39 @@ class TextDataset(object):
 
                 batch[batch_idx, :] = ctx_ids
                 labels[batch_idx] = center_id
+                lineids[batch_idx] = line_idx
                 batch_idx += 1
             
                 # one batch is filled
                 if batch_idx == self.batch_size:
-                    yield batch, labels
+                    yield batch, labels, lineids
                     batch_idx = 0
                     batch = np.ndarray(shape=(self.batch_size, ctx_win_size), dtype=np.int32)
                     labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)                    
+                    lineids = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)                    
 
     def close(self):
         self.rf.close()
 
 if __name__ == "__main__":
-    td = TextDataset("data/test", min_cnt=1, batch_size=5, win_size=2, num_per_win=2)
+    if len(sys.argv) == 1:
+        print "Usage: %s filename" %sys.argv[0]
+        sys.exit()
+
+    filename = sys.argv[1]
+
+    td = TextDataset(filename, min_cnt=1, batch_size=5, win_size=2)
     print td.word2id
     print td.id2word
     batch_iter = td.gen_cbow_batch_iter()
     for x in range(10):
-        batch, labels = batch_iter.next()
+        batch, labels, lineids = batch_iter.next()
         print "batch", len(batch)
         print batch
         print "lables", len(labels)
         print labels.ravel()
+        print "lineids", len(lineids)
+        print lineids
         print "********"
     td.close()
 

@@ -38,19 +38,25 @@ class MyW2V(object):
     
     def fit(self):
         self._init_param()
-        #init = tf.global_variables_initializer()
-        train_inputs = tf.placeholder(tf.int32, shape=([self.batch_size]))
+        init = tf.global_variables_initializer()
+
+        if self.method == "cbow":
+            train_inputs = tf.placeholder(tf.int32, shape=([self.batch_size, 2*self.skip_window]))
+        else:
+            train_inputs = tf.placeholder(tf.int32, shape=([self.batch_size]))
         train_labels = tf.placeholder(tf.int32, shape=([self.batch_size, 1]))
 
         if self.method == "cbow":
             # shape: (n_batch, n_ctx_win_size, embeddings_size)
             ctx_embed = tf.nn.embedding_lookup(self.embeddings, train_inputs)
+            print ctx_embed.get_shape()
             # shape: (n_batch, embeddings_size)
             embed = tf.reduce_mean(ctx_embed, axis=1)
+            print embed.get_shape()
         else:
             # shape: (n_batch, embeddings_size)
             embed = tf.nn.embedding_lookup(self.embeddings, train_inputs)
-
+            print embed.get_shape()
 
         norm = tf.sqrt(tf.reduce_sum(tf.square(self.embeddings), 1, keep_dims=True))
         normalized_embeddings = self.embeddings / norm
@@ -69,9 +75,13 @@ class MyW2V(object):
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
 
         average_loss = 0
-        batch_iter = self.corpus.gen_skipgram_batch_iter()
+        if self.method == "cbow":
+            batch_iter = self.corpus.gen_cbow_batch_iter()
+        else:
+            batch_iter = self.corpus.gen_skipgram_batch_iter()
         with tf.Session() as session:
-            session.run(tf.initialize_all_variables())
+            #session.run(tf.initialize_all_variables())
+            init.run()
             print("init params OK ...")
 
             lr = self.lr
@@ -116,14 +126,15 @@ class MyW2V(object):
     
 def usage():
     print "\t-h / --help"
-    print "\t--corpus: corpus_file (required))"
-    print "\t--method skip-gram/cbow"
-    print "\t--outfile: word vector output"
-    print "\t--visual: word vector picture"
+    print "\t-c/--corpus: corpus_file (required)"
+    print "\t-m/--method: skip-gram/cbow (default: skip-gram)"
+    print "\t-i/--iter: the number of iteration"
+    print "\t-o/--outfile: word vector output"
+    print "\t-v/--visual: word vector picture"
 
 if __name__ == "__main__":
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hco:v:", ["help", "corpus=", "outfile=", "visual=", "method="])
+        opts, args = getopt.getopt(sys.argv[1:], "hc:o:v:i:m:", ["help", "corpus=", "outfile=", "visual=", "method=", "iter="])
     except getopt.GetoptError:
         print "%s usage:" % sys.argv[0]
         usage()
@@ -133,28 +144,31 @@ if __name__ == "__main__":
     outfilename = None
     picfilename = None
     method = "skip-gram"
+    iter_num = 20000
     for opt, arg in opts:
         if opt in ("-h", "--help"):
             print "%s usage:" % sys.argv[0]
             usage()
             sys.exit(1)
-        elif opt in ["method"]:
+        elif opt in ["-m", "--method"]:
             if arg not in ["skip-gram", "cbow"]:
                 usage()
                 sys.exit(1)
-            arg = opt
+            method = arg
         elif opt in ("-c", "--corpus"):
             corpus = arg
         elif opt in ["-o", "--outfile"]:
             outfilename = arg
         elif opt in ["-v", "--visual"]:
             picfilename = arg
-        
+        elif opt in ["-i", "--iter"]:
+            iter_num = int(arg)
     if not (corpus):
         print "required arguments should be set!"
         usage()
         sys.exit(1)
 
+    print "init word2vec with %s and negative sampling" %(method)
     w2v = MyW2V(method=method, corpus_file=corpus, batch_size=128, embedding_size=100, skip_window=4,
                 num_sampled=64, num_step=100000, loss_freq=1000, num_per_win=6, min_cnt=2, lr=1.0)
 
