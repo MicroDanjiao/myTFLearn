@@ -8,6 +8,9 @@ pre_lst = ["\"", "\'"]
 post_lst = [".", ",", "!", "?", ";", "\"", "\'"]
 
 def strip_word(word):
+    '''
+        remove punctuation from the word
+    '''
     if len(word) <= 1:
         return word
     ori_word = word
